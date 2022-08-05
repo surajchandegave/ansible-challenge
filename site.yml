@@ -1,1 +1,18 @@
 ---
+- name: Setup EC2 instance
+  hosts: localhost
+  gather_facts: False
+  vars:
+    - image: ami-0c641f2290e9cd048
+
+  tasks:
+  - name: Launch instance
+    amazon.aws.ec2_instance:
+      key_name: sydney-kp
+      instance_type: t2.micro
+      wait: no
+      group: launch-wizard-1
+      count: 1
+      vpc_subnet_id: subnet-5c74a514
+      assign_public_ip: no
+      image: "{{ image }}"
