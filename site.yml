@@ -11,8 +11,18 @@
       count: 1
       key_name: my-key
       security_group_name: sec_grp1
+      online_games:
+      - car_game
+      - snake_game
   
   tasks:
+  - name: Configure boto and boto3 module
+    pip:
+      name:
+        - boto
+        - boto3
+      state: present
+
   - name: Create a new EC2 key
     ec2_key:
       name: "{{ key_name }}"
@@ -48,7 +58,7 @@
       aws_secret_key: "{{ aws_secret_key }}"
     register: security_group_result
 
-  - name: Launch instance
+  - name: Launch instances for hosting online games
     ec2:
       key_name: "{{ key_name }}"
       region: "{{ region }}"
@@ -60,42 +70,64 @@
       image: "{{ image }}"
       assign_public_ip: yes
       instance_tags:
-        Name: server1
+        Name: "{{ item }}"
+        purpose: online_games
       aws_access_key: "{{ aws_access_key }}"
       aws_secret_key: "{{ aws_secret_key }}"
-    register: ec2_server1
+    loop: "{{ online_games }}"
+    register: ec2_instances
 
-  - name: Add server1 instance to host group
+  - name: Print all available facts
+    debug:
+      msg: "{{ item[0].public_ip }}"
+    loop: "{{ ec2_instances | community.general.json_query('results[*].instances') }}"
+
+  - name: Add instances to host group
     add_host:
-      hostname: "{{ item.public_ip }}"
-      groupname: server1
-    loop: "{{ ec2_server1.instances }}"
+      hostname: "{{ item[0].public_ip }}"
+      groupname: online_games_instances
+      online_game: "{{ item[0].tags.Name }}"
+      dns_name: "{{ item[0].public_dns_name }}"
+    loop: "{{ ec2_instances | community.general.json_query('results[*].instances') }}"
 
   - name: Wait for SSH to come up
     wait_for:
-      host: "{{ item.public_dns_name }}"
+      host: "{{ item[0].public_dns_name }}"
       port: 22
       state: started
-    loop: "{{ ec2_server1.instances }}"
+    loop: "{{ ec2_instances | community.general.json_query('results[*].instances') }}"
 
 - name: Setup httpd
-  hosts: server1
+  hosts: online_games_instances
   tasks:
   - name: Install httpd
     package:
       name: httpd
       state: present
   
-  - name: Copy html
+  - name: Copy car html
     get_url:
       url: https://onehtmlpagechallenge.com/entries/mini_car_game.html
       dest: "/var/www/html/index.html"
+    when: online_game is search('car_game')
+
+  - name: Copy snake html
+    get_url:
+      url: https://onehtmlpagechallenge.com/entries/Snakegame.html
+      dest: "/var/www/html/index.html"
+    when: online_game is search('snake_game')
 
   - name: start httpd
     service:
       name: httpd
       state: started
 
-  - name: Print all available facts
+  - name: Wait for Http server to come up
+    wait_for:
+      host: "{{ inventory_hostname }}"
+      port: 80
+      state: started
+
+  - name: Access online games at below URL
     debug:
-      var: ansible_facts
+      msg: "Access {{ online_game }} at http://{{ dns_name }}"
