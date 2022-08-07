@@ -1,18 +1,101 @@
 ---
 - name: Setup EC2 instance
   hosts: localhost
+  connection: local
   gather_facts: False
+  
   vars:
     - image: ami-0c641f2290e9cd048
-
-  tasks:
-  - name: Launch instance
-    amazon.aws.ec2_instance:
-      key_name: sydney-kp
-      instance_type: t2.micro
-      wait: no
-      group: launch-wizard-1
-      count: 1
+      region: "ap-southeast-2"
       vpc_subnet_id: subnet-5c74a514
-      assign_public_ip: no
+      count: 1
+      key_name: my-key
+      security_group_name: sec_grp1
+  
+  tasks:
+  - name: Create a new EC2 key
+    ec2_key:
+      name: "{{ key_name }}"
+      region: "{{ region }}"
+      aws_access_key: "{{ aws_access_key }}"
+      aws_secret_key: "{{ aws_secret_key }}"
+    register: ec2_key_result
+
+  - name: Save private key
+    copy: content="{{ ec2_key_result.key.private_key }}" dest="./aws.{{ key_name }}.pem" mode=0600
+    when: ec2_key_result.changed
+
+  - name: Create security group
+    ec2_group:
+      name: "{{ security_group_name }}"
+      description: "Sec group for opening SSH and HTTP port"
+      region: "{{ region }}"
+      rules:
+        - proto: tcp
+          ports:
+            - 22
+          cidr_ip: 0.0.0.0/0
+          rule_desc: allow all on ssh port
+        - proto: tcp
+          ports:
+            - 80
+          cidr_ip: 0.0.0.0/0
+          rule_desc: allow all on http port
+      rules_egress:
+        - proto: all
+          cidr_ip: 0.0.0.0/0
+      aws_access_key: "{{ aws_access_key }}"
+      aws_secret_key: "{{ aws_secret_key }}"
+    register: security_group_result
+
+  - name: Launch instance
+    ec2:
+      key_name: "{{ key_name }}"
+      region: "{{ region }}"
+      instance_type: t2.micro
+      wait: yes
+      group: "{{ security_group_name }}"
+      count: "{{ count }}"
+      vpc_subnet_id: "{{ vpc_subnet_id }}"
       image: "{{ image }}"
+      assign_public_ip: yes
+      instance_tags:
+        Name: server1
+      aws_access_key: "{{ aws_access_key }}"
+      aws_secret_key: "{{ aws_secret_key }}"
+    register: ec2_server1
+
+  - name: Add server1 instance to host group
+    add_host:
+      hostname: "{{ item.public_ip }}"
+      groupname: server1
+    loop: "{{ ec2_server1.instances }}"
+
+  - name: Wait for SSH to come up
+    wait_for:
+      host: "{{ item.public_dns_name }}"
+      port: 22
+      state: started
+    loop: "{{ ec2_server1.instances }}"
+
+- name: Setup httpd
+  hosts: server1
+  tasks:
+  - name: Install httpd
+    package:
+      name: httpd
+      state: present
+  
+  - name: Copy html
+    get_url:
+      url: https://onehtmlpagechallenge.com/entries/mini_car_game.html
+      dest: "/var/www/html/index.html"
+
+  - name: start httpd
+    service:
+      name: httpd
+      state: started
+
+  - name: Print all available facts
+    debug:
+      var: ansible_facts
