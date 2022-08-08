@@ -1,2 +1,9 @@
 ---
 # vars file for configure_ec2_instances
+
+count: 1
+key_name: my-key
+security_group_name: sec_grp1
+online_games:
+  car_game: https://onehtmlpagechallenge.com/entries/mini_car_game.html
+  snake_game: https://onehtmlpagechallenge.com/entries/Snakegame.html

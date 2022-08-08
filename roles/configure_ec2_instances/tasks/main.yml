@@ -1,3 +1,103 @@
 ---
 # tasks file for configure_ec2_instances
 
+- name: Configure boto and boto3 module
+  pip:
+    name:
+      - boto
+      - boto3
+    state: present
+
+- name: Create a new EC2 key
+  ec2_key:
+    name: "{{ key_name }}"
+    region: "{{ region }}"
+    aws_access_key: "{{ aws_access_key }}"
+    aws_secret_key: "{{ aws_secret_key }}"
+  register: ec2_key_result
+#  notify: Save private key
+
+- name: Save private key
+  copy: 
+    content: "{{ ec2_key_result.key.private_key }}"
+    dest: "./aws.{{ key_name }}.pem"
+    mode: 0600
+#  when: ec2_key_result.changed
+
+- name: Set ec2_key_result fact
+  set_fact:
+    ec2_key_fact: "{{ ec2_key_result }}"
+
+- name: Debug
+  debug:
+    msg: "ec2_key_fact= {{ec2_key_fact}}"
+
+- name: "Flush handlers"
+  meta: flush_handlers
+
+- name: Create security group
+  ec2_group:
+    name: "{{ security_group_name }}"
+    description: "Sec group for opening SSH and HTTP port"
+    region: "{{ region }}"
+    rules:
+      - proto: tcp
+        ports:
+          - 22
+        cidr_ip: 0.0.0.0/0
+        rule_desc: allow all on ssh port
+      - proto: tcp
+        ports:
+          - 80
+        cidr_ip: 0.0.0.0/0
+        rule_desc: allow all on http port
+    rules_egress:
+      - proto: all
+        cidr_ip: 0.0.0.0/0
+    aws_access_key: "{{ aws_access_key }}"
+    aws_secret_key: "{{ aws_secret_key }}"
+  register: security_group_result
+
+- name: Launch instances for hosting online games
+  ec2:
+    key_name: "{{ key_name }}"
+    region: "{{ region }}"
+    instance_type: t2.micro
+    wait: yes
+    group: "{{ security_group_name }}"
+    count: "{{ count }}"
+    vpc_subnet_id: "{{ vpc_subnet_id }}"
+    image: "{{ image }}"
+    assign_public_ip: yes
+    instance_tags:
+      Name: "{{ item.key }}"
+      Url: "{{ item.value }}"
+      purpose: online_games
+    aws_access_key: "{{ aws_access_key }}"
+    aws_secret_key: "{{ aws_secret_key }}"
+  loop: "{{ online_games | dict2items }}"
+  register: ec2_instances
+
+- name: Add instances to host group
+  add_host:
+    hostname: "{{ item[0].public_ip }}"
+    groupname: online_games_instances
+    online_game_name: "{{ item[0].tags.Name }}"
+    online_game_url: "{{ item[0].tags.Url }}"
+    dns_name: "{{ item[0].public_dns_name }}"
+  loop: "{{ ec2_instances | community.general.json_query('results[*].instances') }}"
+
+- name: Wait for SSH to come up
+  wait_for:
+    host: "{{ item[0].public_dns_name }}"
+    port: 22
+    state: started
+  loop: "{{ ec2_instances | community.general.json_query('results[*].instances') }}"
+
+- name: Create a new EC2 key
+  ec2_key:
+    name: "{{ key_name }}"
+    region: "{{ region }}"
+    aws_access_key: "{{ aws_access_key }}"
+    aws_secret_key: "{{ aws_secret_key }}"
+    state: absent
