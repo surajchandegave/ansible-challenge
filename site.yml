@@ -11,9 +11,12 @@
       count: 1
       key_name: my-key
       security_group_name: sec_grp1
+      #online_games:
+      #- car_game
+      #- snake_game
       online_games:
-      - car_game
-      - snake_game
+        car_game: https://onehtmlpagechallenge.com/entries/mini_car_game.html
+        snake_game: https://onehtmlpagechallenge.com/entries/Snakegame.html
   
   tasks:
   - name: Configure boto and boto3 module
@@ -70,11 +73,12 @@
       image: "{{ image }}"
       assign_public_ip: yes
       instance_tags:
-        Name: "{{ item }}"
+        Name: "{{ item.key }}"
+        Url: "{{ item.value }}"
         purpose: online_games
       aws_access_key: "{{ aws_access_key }}"
       aws_secret_key: "{{ aws_secret_key }}"
-    loop: "{{ online_games }}"
+    loop: "{{ online_games | dict2items }}"
     register: ec2_instances
 
   - name: Print all available facts
@@ -86,7 +90,8 @@
     add_host:
       hostname: "{{ item[0].public_ip }}"
       groupname: online_games_instances
-      online_game: "{{ item[0].tags.Name }}"
+      online_game_name: "{{ item[0].tags.Name }}"
+      online_game_url: "{{ item[0].tags.Url }}"
       dns_name: "{{ item[0].public_dns_name }}"
     loop: "{{ ec2_instances | community.general.json_query('results[*].instances') }}"
 
@@ -102,20 +107,23 @@
   tasks:
   - name: Install httpd
     package:
-      name: httpd
+      name: "{{ item }}"
       state: present
+    with_items:
+      - httpd
+      - hostname
+      - mod_ssl
   
-  - name: Copy car html
+  - name: Copy games html
     get_url:
-      url: https://onehtmlpagechallenge.com/entries/mini_car_game.html
+      url: "{{ online_game_url }}"
       dest: "/var/www/html/index.html"
-    when: online_game is search('car_game')
 
-  - name: Copy snake html
-    get_url:
-      url: https://onehtmlpagechallenge.com/entries/Snakegame.html
-      dest: "/var/www/html/index.html"
-    when: online_game is search('snake_game')
+  #- name: Copy snake html
+  #  get_url:
+  #    url: "{{ online_game_url }}"
+  #    dest: "/var/www/html/index.html"
+  #  when: online_game_name is search('snake_game')
 
   - name: start httpd
     service:
@@ -130,4 +138,4 @@
 
   - name: Access online games at below URL
     debug:
-      msg: "Access {{ online_game }} at http://{{ dns_name }}"
+      msg: "Access {{ online_game_name }} at http://{{ dns_name }}"
