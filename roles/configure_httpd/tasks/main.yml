@@ -17,6 +17,32 @@
     name: httpd
     state: started
 
+- name: Get installed version of Apache.
+  command: "/usr/sbin/httpd -v"
+  changed_when: false
+  register: _httpd_version
+
+- name: Create apache_version variable.
+  set_fact:
+    httpd_version: '{{ _httpd_version.stdout.split()[2].split("/")[1] }}'
+
+- name: Print httpd version
+  debug:
+    msg: "httpd_version= {{ httpd_version }}"
+
+- name: Harden httpd server
+  template:
+    src: "hardening.conf.j2"
+    dest: "{{ httpd_conf_dir }}/conf.d/90.hardening.conf"
+    owner: root
+    group: root
+    mode: 0640
+    backup: yes
+  notify: restart httpd
+
+- name: Flush handlers
+  meta: flush_handlers
+
 - name: Wait for Http server to come up
   wait_for:
     host: "{{ inventory_hostname }}"

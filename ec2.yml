@@ -9,7 +9,7 @@
 
   tasks:
     - name: Configure EC2 instances for hosting online games
-      import_role:
+      include_role:
         name: configure_ec2_instances
 
 - name: Setup httpd

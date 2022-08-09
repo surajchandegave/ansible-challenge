@@ -5,3 +5,9 @@ httpd_pkg_list:
 - hostname
 - mod_ssl
 - chrony
+
+allowed_http_methods: "GET POST"
+
+httpd_conf_dir: /etc/httpd
+httpd_user: apache
+httpd_group: apache

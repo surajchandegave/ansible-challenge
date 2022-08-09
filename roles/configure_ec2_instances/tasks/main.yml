@@ -15,25 +15,16 @@
     aws_access_key: "{{ aws_access_key }}"
     aws_secret_key: "{{ aws_secret_key }}"
   register: ec2_key_result
-#  notify: Save private key
 
 - name: Save private key
   copy: 
     content: "{{ ec2_key_result.key.private_key }}"
     dest: "./aws.{{ key_name }}.pem"
     mode: 0600
-#  when: ec2_key_result.changed
 
 - name: Set ec2_key_result fact
   set_fact:
     ec2_key_fact: "{{ ec2_key_result }}"
-
-- name: Debug
-  debug:
-    msg: "ec2_key_fact= {{ ec2_key_fact }}"
-
-- name: "Flush handlers"
-  meta: flush_handlers
 
 - name: Create security group
   ec2_group:
@@ -58,25 +49,45 @@
     aws_secret_key: "{{ aws_secret_key }}"
   register: security_group_result
 
-- name: Launch instances for hosting online games
-  ec2:
-    key_name: "{{ key_name }}"
-    region: "{{ region }}"
-    instance_type: t2.micro
-    wait: yes
-    group: "{{ security_group_name }}"
-    count: "{{ count }}"
-    vpc_subnet_id: "{{ vpc_subnet_id }}"
-    image: "{{ image }}"
-    assign_public_ip: yes
-    instance_tags:
-      Name: "{{ item.key }}"
-      Url: "{{ item.value }}"
-      purpose: online_games
+- name: Get instances facts
+  ec2_instance_facts:
     aws_access_key: "{{ aws_access_key }}"
     aws_secret_key: "{{ aws_secret_key }}"
-  loop: "{{ online_games | dict2items }}"
-  register: ec2_instances
+    region: "{{ region }}"
+  register: result
+
+- name: Set facts
+  set_fact:
+    vms: "{{ result | community.general.json_query(query) }}"
+  vars:
+    query: "instances[?(@.state.name=='running' && @.tags.purpose=='online_games')]"
+
+- name: Existing EC2 instances running online games
+  debug:
+    msg: "{{ vms }}"
+
+- name: Ensure EC2 instances for hosting online games are running
+  block:
+    - name: Ensure EC2 instances for hosting online games are running
+      ec2:
+        key_name: "{{ key_name }}"
+        region: "{{ region }}"
+        instance_type: t2.micro
+        wait: yes
+        group: "{{ security_group_name }}"
+        count: "{{ count }}"
+        vpc_subnet_id: "{{ vpc_subnet_id }}"
+        image: "{{ image }}"
+        assign_public_ip: yes
+        instance_tags:
+          Name: "{{ item.key }}"
+          Url: "{{ item.value }}"
+          purpose: online_games
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+      loop: "{{ online_games | dict2items }}"
+      register: ec2_instances
+  when: vms|length == online_games|length
 
 - name: Add instances to host group
   add_host:

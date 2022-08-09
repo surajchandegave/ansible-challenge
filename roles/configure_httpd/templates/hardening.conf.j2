@@ -1,0 +1,13 @@
+# {{ansible_managed}}
+
+<Location / >
+  <LimitExcept {{allowed_http_methods}}>
+    # http://httpd.apache.org/docs/2.4/upgrading.html
+    {% if httpd_version.split('.')[1] == '4' %}
+    Require all granted
+    {% else %}
+    Order Allow,Deny
+    Deny from all
+    {% endif %}
+  </LimitExcept>
+</Location>
