@@ -1,0 +1,7 @@
+---
+# vars file for configure_httpd
+httpd_pkg_list:
+- httpd
+- hostname
+- mod_ssl
+- chrony

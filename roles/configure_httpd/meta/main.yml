@@ -1,0 +1,25 @@
+galaxy_info:
+  author: Suraj Chandegave
+  description: Configure httpd server 
+
+  license: BSD
+
+  min_ansible_version: 2.1
+
+  platforms:
+  - name: Fedora
+    versions:
+    - all
+    - 25
+  - name: RHEL
+    versions:
+      - 8
+
+  galaxy_tags:
+    - ec2
+    - amazon
+    - aws
+    - onlinegames
+    - onehtmlgames
+
+dependencies: []

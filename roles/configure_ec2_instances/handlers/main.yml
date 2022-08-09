@@ -1,9 +1,9 @@
 ---
 # handlers file for configure_ec2_instances
 
-- name: Save private key
-  copy: 
-    content:"{{ ec2_key_fact.key.private_key }}"
-    dest:"./aws.{{ key_name }}.pem"
-    mode:0600
+#- name: Save private key
+#  copy: 
+#    content:"{{ ec2_key_fact.key.private_key }}"
+#    dest:"./aws.{{ key_name }}.pem"
+#    mode:0600
 

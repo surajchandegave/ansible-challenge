@@ -1,0 +1,28 @@
+---
+# tasks file for configure_httpd
+
+- name: Install httpd
+  package:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ httpd_pkg_list }}"
+  
+- name: Copy games html
+  get_url:
+    url: "{{ online_game_url }}"
+    dest: "/var/www/html/index.html"
+
+- name: start httpd
+  service:
+    name: httpd
+    state: started
+
+- name: Wait for Http server to come up
+  wait_for:
+    host: "{{ inventory_hostname }}"
+    port: 80
+    state: started
+
+- name: Access online games at below URL
+  debug:
+    msg: "Access {{ online_game_name }} at http://{{ dns_name }}"
