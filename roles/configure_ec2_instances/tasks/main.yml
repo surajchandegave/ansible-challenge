@@ -8,23 +8,19 @@
       - boto3
     state: present
 
-- name: Create a new EC2 key
+- name: Generate a key pair locally
+  community.crypto.openssh_keypair:
+    path: ./aws-keypair
+    owner: "{{ lookup('env','USER') }}"
+
+- name: Upload the public key to EC2 as a new key pair
   ec2_key:
     name: "{{ key_name }}"
     region: "{{ region }}"
     aws_access_key: "{{ aws_access_key }}"
     aws_secret_key: "{{ aws_secret_key }}"
-  register: ec2_key_result
-
-- name: Save private key
-  copy: 
-    content: "{{ ec2_key_result.key.private_key }}"
-    dest: "./aws.{{ key_name }}.pem"
-    mode: 0600
-
-- name: Set ec2_key_result fact
-  set_fact:
-    ec2_key_fact: "{{ ec2_key_result }}"
+    key_material: "{{ lookup('file', './aws-keypair.pub') }}"
+    state: present
 
 - name: Create security group
   ec2_group:
@@ -62,10 +58,6 @@
   vars:
     query: "instances[?(@.state.name=='running' && @.tags.purpose=='online_games')]"
 
-- name: Existing EC2 instances running online games
-  debug:
-    msg: "{{ vms }}"
-
 - name: Ensure EC2 instances for hosting online games are running
   block:
     - name: Ensure EC2 instances for hosting online games are running
@@ -87,28 +79,30 @@
         aws_secret_key: "{{ aws_secret_key }}"
       loop: "{{ online_games | dict2items }}"
       register: ec2_instances
-  when: vms|length == online_games|length
 
-- name: Add instances to host group
+    - name: Add instances to host group
+      add_host:
+        hostname: "{{ item[0].public_ip }}"
+        groupname: online_games_instances
+        online_game_name: "{{ item[0].tags.Name }}"
+        online_game_url: "{{ item[0].tags.Url }}"
+        dns_name: "{{ item[0].public_dns_name }}"
+      loop: "{{ ec2_instances | community.general.json_query('results[*].instances') }}"
+
+    - name: Wait for SSH to come up
+      wait_for:
+        host: "{{ item[0].public_dns_name }}"
+        port: 22
+        state: started
+      loop: "{{ ec2_instances | community.general.json_query('results[*].instances') }}"
+  when: vms|length <= online_games|length
+
+- name: Add already created instances to host group
   add_host:
-    hostname: "{{ item[0].public_ip }}"
+    hostname: "{{ item.public_ip_address }}"
     groupname: online_games_instances
-    online_game_name: "{{ item[0].tags.Name }}"
-    online_game_url: "{{ item[0].tags.Url }}"
-    dns_name: "{{ item[0].public_dns_name }}"
-  loop: "{{ ec2_instances | community.general.json_query('results[*].instances') }}"
+    online_game_name: "{{ item.tags.Name }}"
+    online_game_url: "{{ item.tags.Url }}"
+    dns_name: "{{ item.public_dns_name }}"
+  loop: "{{ vms }}"
 
-- name: Wait for SSH to come up
-  wait_for:
-    host: "{{ item[0].public_dns_name }}"
-    port: 22
-    state: started
-  loop: "{{ ec2_instances | community.general.json_query('results[*].instances') }}"
-
-- name: Create a new EC2 key
-  ec2_key:
-    name: "{{ key_name }}"
-    region: "{{ region }}"
-    aws_access_key: "{{ aws_access_key }}"
-    aws_secret_key: "{{ aws_secret_key }}"
-    state: absent
