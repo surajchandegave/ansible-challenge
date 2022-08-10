@@ -4,3 +4,6 @@
 image: ami-0c641f2290e9cd048
 region: "ap-southeast-2"
 vpc_subnet_id: subnet-5c74a514
+online_games:
+  car_game: https://onehtmlpagechallenge.com/entries/mini_car_game.html
+  snake_game: https://onehtmlpagechallenge.com/entries/Snakegame.html

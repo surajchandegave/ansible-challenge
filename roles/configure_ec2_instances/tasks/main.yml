@@ -67,7 +67,7 @@
         instance_type: t2.micro
         wait: yes
         group: "{{ security_group_name }}"
-        count: "{{ count }}"
+        count: 1
         vpc_subnet_id: "{{ vpc_subnet_id }}"
         image: "{{ image }}"
         assign_public_ip: yes
